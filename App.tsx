@@ -1,243 +1,144 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import React, {useEffect, useState} from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  TextInput,
-  SafeAreaView,
-} from 'react-native';
+import React, {useState, useEffect} from 'react';
+import {View, Text, StyleSheet, TouchableOpacity, Alert} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {GoogleSignin} from '@react-native-google-signin/google-signin';
+
+// Screens
+import SplashScreen from './src/screens/SplashScreen';
+import OnboardingScreen from './src/screens/OnboardingScreen';
+import CategorySelectionScreen from './src/screens/CategorySelectionScreen';
+import HomeScreen from './src/screens/HomeScreen';
+import HabitsScreen from './src/screens/HabitsScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
 
 // Firebase imports
 import {auth, db} from './src/services/firebase';
 import {
   onAuthStateChanged,
-  User,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
   signInAnonymously,
   signOut,
-  linkWithCredential,
-  EmailAuthProvider,
-  GoogleAuthProvider,
+  User,
 } from 'firebase/auth';
+
+// Utils
 import {
-  collection,
-  addDoc,
-  getDocs,
-  query,
-  where,
-  doc,
-  setDoc,
-} from 'firebase/firestore';
+  setOnboardingComplete,
+  setCategoriesSelected,
+} from './src/utils/onboardingUtils';
 
-// Google Sign-In imports
-import {googleSignIn, googleSignOut} from './src/services/googleSignIn';
-
-// Screen imports
-import HomeScreen from './src/screens/HomeScreen';
-import HabitsScreen from './src/screens/HabitsScreen';
-import ProfileScreen from './src/screens/ProfileScreen';
-import SimpleNavigator from './src/navigation/SimpleNavigator';
-import OnboardingScreen from './src/screens/OnboardingScreen';
-import CategorySelectionScreen from './src/screens/CategorySelectionScreen';
-
-const App = () => {
+const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [firestoreStatus, setFirestoreStatus] = useState<string>('Not tested');
-  const [testData, setTestData] = useState<any[]>([]);
-  const [currentScreen, setCurrentScreen] = useState('home');
-  const [showLinkAccount, setShowLinkAccount] = useState(false);
-  const [linkEmail, setLinkEmail] = useState('');
-  const [linkPassword, setLinkPassword] = useState('');
-  const [onboardingComplete, setOnboardingComplete] = useState(false);
-  const [categoriesSelected, setCategoriesSelected] = useState(false);
+  const [currentScreen, setCurrentScreen] = useState('splash');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [isLoadingOnboarding, setIsLoadingOnboarding] = useState(true);
+  const [onboardingComplete, setOnboardingCompleteState] = useState(false);
+  const [categoriesSelected, setCategoriesSelectedState] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, user => {
-      setUser(user);
-      setLoading(false);
-    });
-
-    return unsubscribe;
+    initializeApp();
   }, []);
 
-  useEffect(() => {
-    const checkOnboardingStatus = async () => {
-      try {
-        const onboarded = await AsyncStorage.getItem('onboardingComplete');
-        const categories = await AsyncStorage.getItem('categoriesSelected');
-        const savedCategories = await AsyncStorage.getItem(
-          'selectedCategories',
-        );
+  const initializeApp = async () => {
+    try {
+      // Initialize Google Sign-In
+      GoogleSignin.configure({
+        webClientId: 'YOUR_WEB_CLIENT_ID', // Replace with your actual web client ID
+      });
 
-        setOnboardingComplete(!!onboarded);
-        setCategoriesSelected(!!categories);
+      // Check authentication state
+      const unsubscribe = onAuthStateChanged(auth, async user => {
+        setUser(user);
 
-        if (savedCategories) {
-          setSelectedCategories(JSON.parse(savedCategories));
+        if (user) {
+          // Check onboarding status
+          const isOnboardingComplete = await AsyncStorage.getItem(
+            'onboardingComplete',
+          );
+          const categoriesSelected = await AsyncStorage.getItem(
+            'categoriesSelected',
+          );
+          const savedCategories = await AsyncStorage.getItem(
+            'selectedCategories',
+          );
+
+          setOnboardingCompleteState(isOnboardingComplete === 'true');
+          setCategoriesSelectedState(categoriesSelected === 'true');
+
+          if (savedCategories) {
+            setSelectedCategories(JSON.parse(savedCategories));
+          }
+
+          if (
+            isOnboardingComplete === 'true' &&
+            categoriesSelected === 'true'
+          ) {
+            setCurrentScreen('home');
+          } else if (isOnboardingComplete === 'true') {
+            setCurrentScreen('categories');
+          } else {
+            setCurrentScreen('onboarding');
+          }
+        } else {
+          setCurrentScreen('splash');
         }
-      } catch (error) {
-        console.error('Error checking onboarding status:', error);
-      } finally {
-        setIsLoadingOnboarding(false);
-      }
-    };
 
-    checkOnboardingStatus();
-  }, []);
+        setLoading(false);
+      });
 
-  const handleAuth = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please enter email and password');
-      return;
-    }
-
-    try {
-      if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
-        Alert.alert('Success', 'Account created successfully!');
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-        Alert.alert('Success', 'Signed in successfully!');
-      }
-      setEmail('');
-      setPassword('');
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth);
-      Alert.alert('Success', 'Signed out successfully!');
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error initializing app:', error);
+      setLoading(false);
     }
   };
 
   const handleAnonymousSignIn = async () => {
     try {
-      await signInAnonymously(auth);
-      Alert.alert('Success', 'Signed in anonymously!');
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
+      setLoading(true);
+      const userCredential = await signInAnonymously(auth);
+      setUser(userCredential.user);
+
+      // Check if user has completed onboarding
+      const isOnboardingComplete = await AsyncStorage.getItem(
+        'onboardingComplete',
+      );
+      const categoriesSelected = await AsyncStorage.getItem(
+        'categoriesSelected',
+      );
+      const savedCategories = await AsyncStorage.getItem('selectedCategories');
+
+      setOnboardingCompleteState(isOnboardingComplete === 'true');
+      setCategoriesSelectedState(categoriesSelected === 'true');
+
+      if (savedCategories) {
+        setSelectedCategories(JSON.parse(savedCategories));
+      }
+
+      if (isOnboardingComplete === 'true' && categoriesSelected === 'true') {
+        setCurrentScreen('home');
+      } else if (isOnboardingComplete === 'true') {
+        setCurrentScreen('categories');
+      } else {
+        setCurrentScreen('onboarding');
+      }
+    } catch (error) {
+      console.error('Anonymous sign-in error:', error);
+      Alert.alert('Error', 'Failed to sign in anonymously');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
     try {
-      await googleSignIn();
-      Alert.alert('Success', 'Signed in with Google!');
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
-    }
-  };
-
-  const handleLinkWithEmail = async () => {
-    if (!user || !linkEmail || !linkPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-
-    try {
-      const credential = EmailAuthProvider.credential(linkEmail, linkPassword);
-      await linkWithCredential(user, credential);
-      Alert.alert('Success', 'Account linked with email!');
-      setShowLinkAccount(false);
-      setLinkEmail('');
-      setLinkPassword('');
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
-    }
-  };
-
-  const handleLinkWithGoogle = async () => {
-    if (!user) {
-      Alert.alert('Error', 'No user to link');
-      return;
-    }
-
-    try {
-      const result = await googleSignIn();
-      if (result.user) {
-        Alert.alert('Success', 'Account linked with Google!');
-      }
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
-    }
-  };
-
-  const testFirebaseConnection = () => {
-    Alert.alert(
-      'Firebase Status',
-      `Firebase is ${
-        auth.app.options.projectId ? 'connected' : 'not connected'
-      }!\n\nProject ID: ${auth.app.options.projectId}`,
-    );
-  };
-
-  const testFirestoreWrite = async () => {
-    if (!user) {
-      Alert.alert('Error', 'Please sign in first');
-      return;
-    }
-
-    try {
-      setFirestoreStatus('Writing...');
-      const testDoc = {
-        userId: user.uid,
-        message: 'Hello from Sproutish!',
-        timestamp: new Date(),
-        type: 'test',
-      };
-
-      const docRef = await addDoc(collection(db, 'test'), testDoc);
-      setFirestoreStatus('Write successful!');
-      Alert.alert('Success', `Document written with ID: ${docRef.id}`);
-    } catch (error: any) {
-      setFirestoreStatus('Write failed');
-      Alert.alert('Error', error.message);
-    }
-  };
-
-  const testFirestoreRead = async () => {
-    if (!user) {
-      Alert.alert('Error', 'Please sign in first');
-      return;
-    }
-
-    try {
-      setFirestoreStatus('Reading...');
-      const q = query(collection(db, 'test'), where('userId', '==', user.uid));
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setTestData(data);
-      setFirestoreStatus('Read successful!');
-      Alert.alert('Success', `Found ${data.length} documents`);
-    } catch (error: any) {
-      setFirestoreStatus('Read failed');
-      Alert.alert('Error', error.message);
+      setLoading(true);
+      // For now, just sign in anonymously since Google Sign-In needs more setup
+      await handleAnonymousSignIn();
+    } catch (error) {
+      console.error('Google sign-in error:', error);
+      Alert.alert('Error', 'Failed to sign in with Google');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -246,161 +147,124 @@ const App = () => {
   };
 
   const handleOnboardingComplete = async () => {
-    try {
-      await AsyncStorage.setItem('onboardingComplete', 'true');
-      setOnboardingComplete(true);
-    } catch (error) {
-      console.error('Error saving onboarding status:', error);
-    }
+    await AsyncStorage.setItem('onboardingComplete', 'true');
+    setOnboardingCompleteState(true);
+    setCurrentScreen('categories');
   };
 
-  const handleCategoriesComplete = async (categories: string[]) => {
-    try {
-      await AsyncStorage.setItem('categoriesSelected', 'true');
-      await AsyncStorage.setItem(
-        'selectedCategories',
-        JSON.stringify(categories),
-      );
-      setCategoriesSelected(true);
+  const handleCategoriesSelected = async (categories: string[]) => {
+    if (user) {
+      await setCategoriesSelected(categories);
       setSelectedCategories(categories);
-    } catch (error) {
-      console.error('Error saving categories:', error);
+      setCategoriesSelectedState(true);
+      setCurrentScreen('home');
     }
   };
 
-  if (loading || isLoadingOnboarding) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      setUser(null);
+      setCurrentScreen('splash');
+    } catch (error) {
+      console.error('Sign out error:', error);
+      Alert.alert('Error', 'Failed to sign out');
+    }
+  };
+
+  const handleLinkAccount = async (method: 'email' | 'google') => {
+    if (!user) return;
+
+    try {
+      if (method === 'email') {
+        // For email linking, you might want to show a form
+        Alert.alert('Coming Soon', 'Email linking will be available soon!');
+      } else if (method === 'google') {
+        Alert.alert('Coming Soon', 'Google linking will be available soon!');
+      }
+    } catch (error) {
+      console.error('Account linking error:', error);
+      Alert.alert('Error', 'Failed to link account');
+    }
+  };
+
+  if (loading) {
+    return <SplashScreen />;
   }
 
-  // Show onboarding if not complete
-  if (!onboardingComplete) {
-    return (
-      <OnboardingScreen
-        onComplete={handleOnboardingComplete}
-        onSkip={handleOnboardingComplete}
-      />
-    );
-  }
-
-  // Show category selection if onboarding complete but categories not selected
-  if (!categoriesSelected) {
-    return <CategorySelectionScreen onComplete={handleCategoriesComplete} />;
-  }
-
-  if (!user) {
-    // Sign in/up view
-    return (
-      <ScrollView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>🌱 Sproutish</Text>
-          <Text style={styles.subtitle}>Habit Tracking App</Text>
-        </View>
-
-        <View style={styles.content}>
-          <Text style={styles.sectionTitle}>
-            {isSignUp ? 'Create Account' : 'Sign In'}
-          </Text>
-
-          <View style={styles.authForm}>
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-
-            <TouchableOpacity style={styles.button} onPress={handleAuth}>
-              <Text style={styles.buttonText}>
-                {isSignUp ? 'Sign Up' : 'Sign In'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.anonymousButton}
-              onPress={handleAnonymousSignIn}>
-              <Text style={styles.buttonText}>Continue as Guest</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.googleButton}
-              onPress={handleGoogleSignIn}>
-              <Text style={styles.buttonText}>Sign in with Google</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.switchButton}
-              onPress={() => setIsSignUp(!isSignUp)}>
-              <Text style={styles.switchButtonText}>
-                {isSignUp
-                  ? 'Already have an account? Sign In'
-                  : "Don't have an account? Sign Up"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.statusCard}>
-            <Text style={styles.statusTitle}>Connection Status</Text>
-            <Text style={styles.statusValue}>
-              ✅ Connected to: {auth.app.options.projectId}
+  // Render different screens based on current state
+  switch (currentScreen) {
+    case 'splash':
+      return (
+        <View style={styles.container}>
+          <View style={styles.content}>
+            <Text style={styles.title}>🌱 Sproutish</Text>
+            <Text style={styles.subtitle}>
+              Build positive habits, one day at a time
             </Text>
+
+            <View style={styles.authButtons}>
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={handleAnonymousSignIn}
+                disabled={loading}>
+                <Text style={styles.primaryButtonText}>Continue as Guest</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={handleGoogleSignIn}
+                disabled={loading}>
+                <Text style={styles.secondaryButtonText}>
+                  Sign in with Google
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-
-          <TouchableOpacity
-            style={styles.button}
-            onPress={testFirebaseConnection}>
-            <Text style={styles.buttonText}>Test Firebase Connection</Text>
-          </TouchableOpacity>
         </View>
-      </ScrollView>
-    );
-  }
+      );
 
-  // Signed in view with navigation
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.screenContainer}>
-        {currentScreen === 'home' && <HomeScreen />}
-        {currentScreen === 'habits' && <HabitsScreen />}
-        {currentScreen === 'profile' && (
-          <ProfileScreen
-            user={user}
-            onLinkWithEmail={handleLinkWithEmail}
-            onLinkWithGoogle={handleLinkWithGoogle}
-            onSignOut={handleSignOut}
-          />
-        )}
-      </View>
-      <SimpleNavigator
-        currentScreen={currentScreen}
-        onNavigate={handleNavigate}
-      />
-    </SafeAreaView>
-  );
+    case 'onboarding':
+      return (
+        <OnboardingScreen
+          onComplete={handleOnboardingComplete}
+          onSkip={handleOnboardingComplete}
+        />
+      );
+
+    case 'categories':
+      return <CategorySelectionScreen onComplete={handleCategoriesSelected} />;
+
+    case 'home':
+      return (
+        <HomeScreen
+          userId={user?.uid || ''}
+          selectedCategories={selectedCategories}
+          onNavigate={handleNavigate}
+        />
+      );
+
+    case 'habits':
+      return <HabitsScreen />;
+
+    case 'profile':
+      return <ProfileScreen user={user} onSignOut={handleSignOut} />;
+
+    default:
+      return <SplashScreen />;
+  }
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  header: {
-    alignItems: 'center',
-    paddingVertical: 40,
     backgroundColor: '#4CAF50',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    alignItems: 'center',
+    padding: 20,
   },
   title: {
     fontSize: 32,
@@ -412,116 +276,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     opacity: 0.9,
+    textAlign: 'center',
+    marginBottom: 40,
   },
-  content: {
-    padding: 20,
+  authButtons: {
+    width: '100%',
+    maxWidth: 300,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-    marginTop: 20,
-  },
-  authForm: {
-    marginBottom: 20,
-  },
-  input: {
+  primaryButton: {
     backgroundColor: '#fff',
-    padding: 16,
+    paddingVertical: 16,
     borderRadius: 8,
+    alignItems: 'center',
     marginBottom: 12,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
   },
-  statusCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statusTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  statusValue: {
-    fontSize: 16,
+  primaryButtonText: {
     color: '#4CAF50',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  button: {
-    backgroundColor: '#4CAF50',
-    padding: 16,
+  secondaryButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 16,
     borderRadius: 8,
     alignItems: 'center',
-    marginVertical: 8,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
-  signOutButton: {
-    backgroundColor: '#f44336',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginVertical: 8,
-  },
-  anonymousButton: {
-    backgroundColor: '#2196F3',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginVertical: 8,
-  },
-  googleButton: {
-    backgroundColor: '#4CAF50',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginVertical: 8,
-  },
-  switchButton: {
-    padding: 12,
-    alignItems: 'center',
-  },
-  buttonText: {
+  secondaryButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
-  },
-  switchButtonText: {
-    color: '#4CAF50',
-    fontSize: 14,
-  },
-  nextSteps: {
-    marginTop: 20,
-  },
-  nextStepItem: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 8,
-    paddingLeft: 10,
-  },
-  dataItem: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 4,
-  },
-  screenContainer: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
 });
 
