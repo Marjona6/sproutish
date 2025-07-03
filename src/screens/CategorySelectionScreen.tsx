@@ -135,8 +135,8 @@ const CategorySelectionScreen: React.FC<CategorySelectionScreenProps> = ({
 
       <View style={styles.footer}>
         <Text style={styles.selectionText}>
-          {selectedCategories.length} category
-          {selectedCategories.length !== 1 ? 's' : ''} selected
+          {selectedCategories.length} categor
+          {selectedCategories.length !== 1 ? 'ies' : 'y'} selected
         </Text>
         <TouchableOpacity
           style={[
