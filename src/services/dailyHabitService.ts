@@ -50,8 +50,9 @@ export const getTodaysHabit = async (
           habit,
         };
       } else {
-        // Assign new habit for today
-        const newHabit = getRandomHabit(selectedCategories);
+        // Get blocked habits and assign new habit for today
+        const blockedHabits = await getBlockedHabits(userId);
+        const newHabit = getRandomHabit(selectedCategories, blockedHabits);
         const dailyHabitData: Omit<DailyHabit, 'id'> = {
           habitId: newHabit.id,
           date: today,
@@ -83,8 +84,9 @@ export const getTodaysHabit = async (
           habit,
         };
       } else {
-        // Assign new habit for today
-        const newHabit = getRandomHabit(selectedCategories);
+        // Get blocked habits and assign new habit for today
+        const blockedHabits = await getBlockedHabits(userId);
+        const newHabit = getRandomHabit(selectedCategories, blockedHabits);
         const dailyHabit: DailyHabit = {
           id: `local_${Date.now()}`,
           habitId: newHabit.id,
@@ -104,7 +106,8 @@ export const getTodaysHabit = async (
   } catch (error) {
     console.error("Error getting today's habit:", error);
     // Fallback to local storage
-    const newHabit = getRandomHabit(selectedCategories);
+    const blockedHabits = await getBlockedHabits(userId);
+    const newHabit = getRandomHabit(selectedCategories, blockedHabits);
     const dailyHabit: DailyHabit = {
       id: `local_${Date.now()}`,
       habitId: newHabit.id,
@@ -156,6 +159,142 @@ export const markHabitComplete = async (
     }
   } catch (error) {
     console.error('Error marking habit complete:', error);
+  }
+};
+
+export const skipHabitForToday = async (
+  dailyHabitId: string,
+  userId: string,
+): Promise<void> => {
+  const today = getTodayString();
+
+  try {
+    // Check if user is signed in
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    const isSignedIn = userDoc.exists() && userDoc.data()?.email;
+
+    if (isSignedIn) {
+      // Update in Firestore
+      await setDoc(
+        doc(db, 'dailyHabits', dailyHabitId),
+        {
+          skipped: true,
+          skippedAt: new Date().toISOString(),
+        },
+        {merge: true},
+      );
+    } else {
+      // Update in AsyncStorage
+      const storageKey = `dailyHabit_${userId}_${today}`;
+      const storedHabit = await AsyncStorage.getItem(storageKey);
+
+      if (storedHabit) {
+        const dailyHabit = JSON.parse(storedHabit);
+        dailyHabit.skipped = true;
+        dailyHabit.skippedAt = new Date().toISOString();
+
+        await AsyncStorage.setItem(storageKey, JSON.stringify(dailyHabit));
+      }
+    }
+  } catch (error) {
+    console.error('Error skipping habit:', error);
+  }
+};
+
+export const blockHabit = async (
+  habitId: string,
+  userId: string,
+): Promise<void> => {
+  try {
+    // Check if user is signed in
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    const isSignedIn = userDoc.exists() && userDoc.data()?.email;
+
+    if (isSignedIn) {
+      // Store in Firestore
+      await setDoc(doc(db, 'blockedHabits', `${userId}_${habitId}`), {
+        userId,
+        habitId,
+        blockedAt: new Date().toISOString(),
+      });
+    } else {
+      // Store in AsyncStorage
+      const blockedHabitsKey = `blockedHabits_${userId}`;
+      const existingBlocked = await AsyncStorage.getItem(blockedHabitsKey);
+      const blockedHabits = existingBlocked ? JSON.parse(existingBlocked) : [];
+
+      if (!blockedHabits.includes(habitId)) {
+        blockedHabits.push(habitId);
+        await AsyncStorage.setItem(
+          blockedHabitsKey,
+          JSON.stringify(blockedHabits),
+        );
+      }
+    }
+  } catch (error) {
+    console.error('Error blocking habit:', error);
+  }
+};
+
+export const getBlockedHabits = async (userId: string): Promise<string[]> => {
+  try {
+    // Check if user is signed in
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    const isSignedIn = userDoc.exists() && userDoc.data()?.email;
+
+    if (isSignedIn) {
+      // Get from Firestore
+      const blockedHabitsQuery = query(
+        collection(db, 'blockedHabits'),
+        where('userId', '==', userId),
+      );
+
+      const querySnapshot = await getDocs(blockedHabitsQuery);
+      return querySnapshot.docs.map(doc => doc.data().habitId);
+    } else {
+      // Get from AsyncStorage
+      const blockedHabitsKey = `blockedHabits_${userId}`;
+      const existingBlocked = await AsyncStorage.getItem(blockedHabitsKey);
+      return existingBlocked ? JSON.parse(existingBlocked) : [];
+    }
+  } catch (error) {
+    console.error('Error getting blocked habits:', error);
+    return [];
+  }
+};
+
+export const unblockHabit = async (
+  habitId: string,
+  userId: string,
+): Promise<void> => {
+  try {
+    // Check if user is signed in
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    const isSignedIn = userDoc.exists() && userDoc.data()?.email;
+
+    if (isSignedIn) {
+      // Remove from Firestore
+      await setDoc(
+        doc(db, 'blockedHabits', `${userId}_${habitId}`),
+        {},
+        {merge: true},
+      );
+    } else {
+      // Remove from AsyncStorage
+      const blockedHabitsKey = `blockedHabits_${userId}`;
+      const existingBlocked = await AsyncStorage.getItem(blockedHabitsKey);
+      const blockedHabits = existingBlocked ? JSON.parse(existingBlocked) : [];
+
+      const updatedBlocked = blockedHabits.filter(
+        (id: string) => id !== habitId,
+      );
+      await AsyncStorage.setItem(
+        blockedHabitsKey,
+        JSON.stringify(updatedBlocked),
+      );
+    }
+  } catch (error) {
+    console.error('Error unblocking habit:', error);
   }
 };
 

@@ -417,10 +417,20 @@ export const getHabitsByCategory = (category: string): Habit[] => {
   return habits.filter(habit => habit.category === category);
 };
 
-export const getRandomHabit = (categories: string[]): Habit => {
-  const filteredHabits = habits.filter(habit =>
-    categories.includes(habit.category),
+export const getRandomHabit = (
+  categories: string[],
+  blockedHabits: string[] = [],
+): Habit => {
+  const filteredHabits = habits.filter(
+    habit =>
+      categories.includes(habit.category) && !blockedHabits.includes(habit.id),
   );
+
+  if (filteredHabits.length === 0) {
+    // If all habits are blocked, return a default habit
+    return habits[0];
+  }
+
   const randomIndex = Math.floor(Math.random() * filteredHabits.length);
   return filteredHabits[randomIndex];
 };
