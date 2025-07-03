@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "961139816561",
+    "project_id": "sproutish-app",
+    "storage_bucket": "sproutish-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:961139816561:android:50fac0dda3bd0ad54b83d0",
+        "android_client_info": {
+          "package_name": "com.sproutish"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "961139816561-9atb36tb3fd76co3m8faiqdue4a5727s.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD5JvbqZ0g8i04e9rZkcS_KWKvPH1Koyy4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "961139816561-9atb36tb3fd76co3m8faiqdue4a5727s.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
