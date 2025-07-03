@@ -26,6 +26,9 @@ import {
   signInWithEmailAndPassword,
   signInAnonymously,
   signOut,
+  linkWithCredential,
+  EmailAuthProvider,
+  GoogleAuthProvider,
 } from 'firebase/auth';
 import {
   collection,
@@ -36,6 +39,9 @@ import {
   doc,
   setDoc,
 } from 'firebase/firestore';
+
+// Google Sign-In imports
+import {googleSignIn, googleSignOut} from './src/services/googleSignIn';
 
 // Screen imports
 import HomeScreen from './src/screens/HomeScreen';
@@ -52,6 +58,9 @@ const App = () => {
   const [firestoreStatus, setFirestoreStatus] = useState<string>('Not tested');
   const [testData, setTestData] = useState<any[]>([]);
   const [currentScreen, setCurrentScreen] = useState('home');
+  const [showLinkAccount, setShowLinkAccount] = useState(false);
+  const [linkEmail, setLinkEmail] = useState('');
+  const [linkPassword, setLinkPassword] = useState('');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, user => {
@@ -96,6 +105,49 @@ const App = () => {
     try {
       await signInAnonymously(auth);
       Alert.alert('Success', 'Signed in anonymously!');
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      await googleSignIn();
+      Alert.alert('Success', 'Signed in with Google!');
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
+  const handleLinkWithEmail = async () => {
+    if (!user || !linkEmail || !linkPassword) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    try {
+      const credential = EmailAuthProvider.credential(linkEmail, linkPassword);
+      await linkWithCredential(user, credential);
+      Alert.alert('Success', 'Account linked with email!');
+      setShowLinkAccount(false);
+      setLinkEmail('');
+      setLinkPassword('');
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
+  const handleLinkWithGoogle = async () => {
+    if (!user) {
+      Alert.alert('Error', 'No user to link');
+      return;
+    }
+
+    try {
+      const result = await googleSignIn();
+      if (result.user) {
+        Alert.alert('Success', 'Account linked with Google!');
+      }
     } catch (error: any) {
       Alert.alert('Error', error.message);
     }
@@ -214,6 +266,12 @@ const App = () => {
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={styles.googleButton}
+              onPress={handleGoogleSignIn}>
+              <Text style={styles.buttonText}>Sign in with Google</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.switchButton}
               onPress={() => setIsSignUp(!isSignUp)}>
               <Text style={styles.switchButtonText}>
@@ -247,7 +305,13 @@ const App = () => {
       <View style={styles.screenContainer}>
         {currentScreen === 'home' && <HomeScreen />}
         {currentScreen === 'habits' && <HabitsScreen />}
-        {currentScreen === 'profile' && <ProfileScreen />}
+        {currentScreen === 'profile' && (
+          <ProfileScreen
+            user={user}
+            onLinkWithEmail={handleLinkWithEmail}
+            onLinkWithGoogle={handleLinkWithGoogle}
+          />
+        )}
       </View>
       <SimpleNavigator
         currentScreen={currentScreen}
@@ -337,6 +401,13 @@ const styles = StyleSheet.create({
   },
   anonymousButton: {
     backgroundColor: '#2196F3',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  googleButton: {
+    backgroundColor: '#4CAF50',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
