@@ -14,10 +14,11 @@ import {
   TouchableOpacity,
   Alert,
   TextInput,
+  SafeAreaView,
 } from 'react-native';
 
 // Firebase imports
-import {auth} from './src/services/firebase';
+import {auth, db} from './src/services/firebase';
 import {
   onAuthStateChanged,
   User,
@@ -26,6 +27,21 @@ import {
   signInAnonymously,
   signOut,
 } from 'firebase/auth';
+import {
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  where,
+  doc,
+  setDoc,
+} from 'firebase/firestore';
+
+// Screen imports
+import HomeScreen from './src/screens/HomeScreen';
+import HabitsScreen from './src/screens/HabitsScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
+import SimpleNavigator from './src/navigation/SimpleNavigator';
 
 const App = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -33,6 +49,9 @@ const App = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
+  const [firestoreStatus, setFirestoreStatus] = useState<string>('Not tested');
+  const [testData, setTestData] = useState<any[]>([]);
+  const [currentScreen, setCurrentScreen] = useState('home');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, user => {
@@ -91,137 +110,150 @@ const App = () => {
     );
   };
 
+  const testFirestoreWrite = async () => {
+    if (!user) {
+      Alert.alert('Error', 'Please sign in first');
+      return;
+    }
+
+    try {
+      setFirestoreStatus('Writing...');
+      const testDoc = {
+        userId: user.uid,
+        message: 'Hello from Sproutish!',
+        timestamp: new Date(),
+        type: 'test',
+      };
+
+      const docRef = await addDoc(collection(db, 'test'), testDoc);
+      setFirestoreStatus('Write successful!');
+      Alert.alert('Success', `Document written with ID: ${docRef.id}`);
+    } catch (error: any) {
+      setFirestoreStatus('Write failed');
+      Alert.alert('Error', error.message);
+    }
+  };
+
+  const testFirestoreRead = async () => {
+    if (!user) {
+      Alert.alert('Error', 'Please sign in first');
+      return;
+    }
+
+    try {
+      setFirestoreStatus('Reading...');
+      const q = query(collection(db, 'test'), where('userId', '==', user.uid));
+      const querySnapshot = await getDocs(q);
+      const data = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setTestData(data);
+      setFirestoreStatus('Read successful!');
+      Alert.alert('Success', `Found ${data.length} documents`);
+    } catch (error: any) {
+      setFirestoreStatus('Read failed');
+      Alert.alert('Error', error.message);
+    }
+  };
+
+  const handleNavigate = (screen: string) => {
+    setCurrentScreen(screen);
+  };
+
   if (loading) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>🌱 Sproutish</Text>
-        <Text style={styles.subtitle}>Loading...</Text>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
 
-  return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>🌱 Sproutish</Text>
-        <Text style={styles.subtitle}>Habit Tracking App</Text>
-      </View>
-
-      <View style={styles.content}>
-        {user ? (
-          // Signed in view
-          <>
-            <Text style={styles.sectionTitle}>Welcome! 🎉</Text>
-            <View style={styles.statusCard}>
-              <Text style={styles.statusTitle}>Signed in as:</Text>
-              <Text style={styles.statusValue}>
-                ✅ {user.email || 'Anonymous User'}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.signOutButton}
-              onPress={handleSignOut}>
-              <Text style={styles.buttonText}>Sign Out</Text>
-            </TouchableOpacity>
-
-            <View style={styles.statusCard}>
-              <Text style={styles.statusTitle}>Connection Status</Text>
-              <Text style={styles.statusValue}>
-                ✅ Connected to: {auth.app.options.projectId}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.button}
-              onPress={testFirebaseConnection}>
-              <Text style={styles.buttonText}>Test Firebase Connection</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          // Sign in/up view
-          <>
-            <Text style={styles.sectionTitle}>
-              {isSignUp ? 'Create Account' : 'Sign In'}
-            </Text>
-
-            <View style={styles.authForm}>
-              <TextInput
-                style={styles.input}
-                placeholder="Email"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
-
-              <TouchableOpacity style={styles.button} onPress={handleAuth}>
-                <Text style={styles.buttonText}>
-                  {isSignUp ? 'Sign Up' : 'Sign In'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.anonymousButton}
-                onPress={handleAnonymousSignIn}>
-                <Text style={styles.buttonText}>Continue as Guest</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.switchButton}
-                onPress={() => setIsSignUp(!isSignUp)}>
-                <Text style={styles.switchButtonText}>
-                  {isSignUp
-                    ? 'Already have an account? Sign In'
-                    : "Don't have an account? Sign Up"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.statusCard}>
-              <Text style={styles.statusTitle}>Connection Status</Text>
-              <Text style={styles.statusValue}>
-                ✅ Connected to: {auth.app.options.projectId}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.button}
-              onPress={testFirebaseConnection}>
-              <Text style={styles.buttonText}>Test Firebase Connection</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        <View style={styles.nextSteps}>
-          <Text style={styles.sectionTitle}>Setup Progress</Text>
-          <Text style={styles.nextStepItem}>
-            1. ✅ Firebase project configured
-          </Text>
-          <Text style={styles.nextStepItem}>
-            2. ✅ Authentication service ready
-          </Text>
-          <Text style={styles.nextStepItem}>
-            3. {user ? '✅' : '⏳'} Enable Authentication methods in Firebase
-            Console
-          </Text>
-          <Text style={styles.nextStepItem}>
-            4. ⏳ Set up Firestore database
-          </Text>
-          <Text style={styles.nextStepItem}>
-            5. ⏳ Add navigation and screens
-          </Text>
+  if (!user) {
+    // Sign in/up view
+    return (
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>🌱 Sproutish</Text>
+          <Text style={styles.subtitle}>Habit Tracking App</Text>
         </View>
+
+        <View style={styles.content}>
+          <Text style={styles.sectionTitle}>
+            {isSignUp ? 'Create Account' : 'Sign In'}
+          </Text>
+
+          <View style={styles.authForm}>
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+
+            <TouchableOpacity style={styles.button} onPress={handleAuth}>
+              <Text style={styles.buttonText}>
+                {isSignUp ? 'Sign Up' : 'Sign In'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.anonymousButton}
+              onPress={handleAnonymousSignIn}>
+              <Text style={styles.buttonText}>Continue as Guest</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.switchButton}
+              onPress={() => setIsSignUp(!isSignUp)}>
+              <Text style={styles.switchButtonText}>
+                {isSignUp
+                  ? 'Already have an account? Sign In'
+                  : "Don't have an account? Sign Up"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.statusCard}>
+            <Text style={styles.statusTitle}>Connection Status</Text>
+            <Text style={styles.statusValue}>
+              ✅ Connected to: {auth.app.options.projectId}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.button}
+            onPress={testFirebaseConnection}>
+            <Text style={styles.buttonText}>Test Firebase Connection</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    );
+  }
+
+  // Signed in view with navigation
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.screenContainer}>
+        {currentScreen === 'home' && <HomeScreen />}
+        {currentScreen === 'habits' && <HabitsScreen />}
+        {currentScreen === 'profile' && <ProfileScreen />}
       </View>
-    </ScrollView>
+      <SimpleNavigator
+        currentScreen={currentScreen}
+        onNavigate={handleNavigate}
+      />
+    </SafeAreaView>
   );
 };
 
@@ -331,6 +363,23 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 8,
     paddingLeft: 10,
+  },
+  dataItem: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 4,
+  },
+  screenContainer: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 
