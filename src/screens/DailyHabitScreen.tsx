@@ -9,7 +9,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import {Habit, DailyHabit} from '../types/habit';
-import {getTodaysHabit, markHabitComplete} from '../services/dailyHabitService';
+import {
+  getTodaysHabit,
+  markHabitComplete,
+  skipHabitForToday,
+  blockHabit,
+} from '../services/dailyHabitService';
 
 interface DailyHabitScreenProps {
   userId: string;
@@ -24,6 +29,8 @@ const DailyHabitScreen: React.FC<DailyHabitScreenProps> = ({
   const [habit, setHabit] = useState<Habit | null>(null);
   const [dailyHabit, setDailyHabit] = useState<DailyHabit | null>(null);
   const [completing, setCompleting] = useState(false);
+  const [showTips, setShowTips] = useState(false);
+  const [showBenefits, setShowBenefits] = useState(false);
 
   useEffect(() => {
     loadTodaysHabit();
@@ -68,6 +75,80 @@ const DailyHabitScreen: React.FC<DailyHabitScreenProps> = ({
     } finally {
       setCompleting(false);
     }
+  };
+
+  const handleSkipToday = async () => {
+    if (!dailyHabit) return;
+
+    Alert.alert(
+      'Skip for Today',
+      'Are you sure you want to skip this habit for today?',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Skip',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await skipHabitForToday(dailyHabit.id, userId);
+
+              // Update local state
+              setDailyHabit(prev =>
+                prev
+                  ? {
+                      ...prev,
+                      skipped: true,
+                      skippedAt: new Date().toISOString(),
+                    }
+                  : null,
+              );
+
+              Alert.alert(
+                'Habit Skipped',
+                "This habit has been skipped for today. You'll get a new habit tomorrow!",
+                [{text: 'Continue', style: 'default'}],
+              );
+            } catch (error) {
+              console.error('Error skipping habit:', error);
+              Alert.alert('Error', 'Failed to skip habit');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleNeverShow = async () => {
+    if (!dailyHabit || !habit) return;
+
+    Alert.alert(
+      'Never Show Again',
+      'This habit will be removed from your rotation. You can always add it back later in settings.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await blockHabit(habit.id, userId);
+
+              // Mark as completed to move past this habit
+              await handleCompleteHabit();
+
+              Alert.alert(
+                'Habit Removed',
+                "This habit has been removed from your rotation. You won't see it again unless you unblock it in settings.",
+                [{text: 'Continue', style: 'default'}],
+              );
+            } catch (error) {
+              console.error('Error blocking habit:', error);
+              Alert.alert('Error', 'Failed to remove habit');
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (loading) {
@@ -143,6 +224,48 @@ const DailyHabitScreen: React.FC<DailyHabitScreenProps> = ({
           </View>
         </View>
 
+        {/* Tips Section */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => setShowTips(!showTips)}>
+            <Text style={styles.sectionTitle}>💡 Tips</Text>
+            <Text style={styles.expandIcon}>{showTips ? '▼' : '▶'}</Text>
+          </TouchableOpacity>
+
+          {showTips && (
+            <View style={styles.tipsContainer}>
+              {habit.tips.map((tip, index) => (
+                <View key={index} style={styles.tipItem}>
+                  <Text style={styles.tipBullet}>•</Text>
+                  <Text style={styles.tipText}>{tip}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Benefits Section */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => setShowBenefits(!showBenefits)}>
+            <Text style={styles.sectionTitle}>🌟 Benefits</Text>
+            <Text style={styles.expandIcon}>{showBenefits ? '▼' : '▶'}</Text>
+          </TouchableOpacity>
+
+          {showBenefits && (
+            <View style={styles.benefitsContainer}>
+              {habit.benefits.map((benefit, index) => (
+                <View key={index} style={styles.benefitItem}>
+                  <Text style={styles.benefitBullet}>✨</Text>
+                  <Text style={styles.benefitText}>{benefit}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
         {dailyHabit.completed ? (
           <View style={styles.completedSection}>
             <Text style={styles.completedIcon}>✅</Text>
@@ -157,40 +280,36 @@ const DailyHabitScreen: React.FC<DailyHabitScreenProps> = ({
             </Text>
           </View>
         ) : (
-          <TouchableOpacity
-            style={[
-              styles.completeButton,
-              completing && styles.completingButton,
-            ]}
-            onPress={handleCompleteHabit}
-            disabled={completing}>
-            {completing ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.completeButtonText}>Mark as Complete</Text>
-            )}
-          </TouchableOpacity>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[
+                styles.completeButton,
+                completing && styles.completingButton,
+              ]}
+              onPress={handleCompleteHabit}
+              disabled={completing}>
+              {completing ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.completeButtonText}>Mark as Complete</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.skipButtons}>
+              <TouchableOpacity
+                style={styles.skipButton}
+                onPress={handleSkipToday}>
+                <Text style={styles.skipButtonText}>Skip Today</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.neverShowButton}
+                onPress={handleNeverShow}>
+                <Text style={styles.neverShowButtonText}>Never Show</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>💡 Tips</Text>
-        {habit.tips.map((tip, index) => (
-          <View key={index} style={styles.tipItem}>
-            <Text style={styles.tipBullet}>•</Text>
-            <Text style={styles.tipText}>{tip}</Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>🌟 Benefits</Text>
-        {habit.benefits.map((benefit, index) => (
-          <View key={index} style={styles.benefitItem}>
-            <Text style={styles.benefitBullet}>✨</Text>
-            <Text style={styles.benefitText}>{benefit}</Text>
-          </View>
-        ))}
       </View>
     </ScrollView>
   );
@@ -313,11 +432,71 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'capitalize',
   },
+  section: {
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+  },
+  expandIcon: {
+    fontSize: 16,
+    color: '#7f8c8d',
+  },
+  tipsContainer: {
+    marginTop: 8,
+  },
+  tipItem: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  tipBullet: {
+    fontSize: 16,
+    color: '#4CAF50',
+    marginRight: 8,
+    marginTop: 2,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#2c3e50',
+    lineHeight: 20,
+  },
+  benefitsContainer: {
+    marginTop: 8,
+  },
+  benefitItem: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  benefitBullet: {
+    fontSize: 16,
+    color: '#FF9800',
+    marginRight: 8,
+    marginTop: 2,
+  },
+  benefitText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#2c3e50',
+    lineHeight: 20,
+  },
+  actionButtons: {
+    marginTop: 16,
+  },
   completeButton: {
     backgroundColor: '#4CAF50',
     paddingVertical: 16,
     borderRadius: 8,
     alignItems: 'center',
+    marginBottom: 12,
   },
   completingButton: {
     backgroundColor: '#81C784',
@@ -326,6 +505,40 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
+  },
+  skipButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  skipButton: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+  },
+  skipButtonText: {
+    color: '#6c757d',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  neverShowButton: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+  },
+  neverShowButtonText: {
+    color: '#dc3545',
+    fontSize: 14,
+    fontWeight: '500',
   },
   completedSection: {
     alignItems: 'center',
@@ -344,56 +557,6 @@ const styles = StyleSheet.create({
   completedTime: {
     fontSize: 14,
     color: '#7f8c8d',
-  },
-  section: {
-    backgroundColor: '#fff',
-    marginHorizontal: 20,
-    marginBottom: 16,
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 16,
-  },
-  tipItem: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  tipBullet: {
-    fontSize: 16,
-    color: '#4CAF50',
-    marginRight: 8,
-    marginTop: 2,
-  },
-  tipText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#2c3e50',
-    lineHeight: 22,
-  },
-  benefitItem: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  benefitBullet: {
-    fontSize: 16,
-    color: '#FF9800',
-    marginRight: 8,
-    marginTop: 2,
-  },
-  benefitText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#2c3e50',
-    lineHeight: 22,
   },
 });
 
