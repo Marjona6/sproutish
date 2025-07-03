@@ -13,15 +13,26 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  TextInput,
 } from 'react-native';
 
 // Firebase imports
 import {auth} from './src/services/firebase';
-import {onAuthStateChanged, User} from 'firebase/auth';
+import {
+  onAuthStateChanged,
+  User,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInAnonymously,
+  signOut,
+} from 'firebase/auth';
 
 const App = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, user => {
@@ -31,6 +42,45 @@ const App = () => {
 
     return unsubscribe;
   }, []);
+
+  const handleAuth = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter email and password');
+      return;
+    }
+
+    try {
+      if (isSignUp) {
+        await createUserWithEmailAndPassword(auth, email, password);
+        Alert.alert('Success', 'Account created successfully!');
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        Alert.alert('Success', 'Signed in successfully!');
+      }
+      setEmail('');
+      setPassword('');
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      Alert.alert('Success', 'Signed out successfully!');
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
+  const handleAnonymousSignIn = async () => {
+    try {
+      await signInAnonymously(auth);
+      Alert.alert('Success', 'Signed in anonymously!');
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
 
   const testFirebaseConnection = () => {
     Alert.alert(
@@ -58,34 +108,101 @@ const App = () => {
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.sectionTitle}>Firebase Setup Complete! 🎉</Text>
-        <Text style={styles.description}>
-          Your Firebase configuration is working properly. The app is now
-          connected to your Firebase project.
-        </Text>
+        {user ? (
+          // Signed in view
+          <>
+            <Text style={styles.sectionTitle}>Welcome! 🎉</Text>
+            <View style={styles.statusCard}>
+              <Text style={styles.statusTitle}>Signed in as:</Text>
+              <Text style={styles.statusValue}>
+                ✅ {user.email || 'Anonymous User'}
+              </Text>
+            </View>
 
-        <View style={styles.statusCard}>
-          <Text style={styles.statusTitle}>Connection Status</Text>
-          <Text style={styles.statusValue}>
-            ✅ Connected to: {auth.app.options.projectId}
-          </Text>
-        </View>
+            <TouchableOpacity
+              style={styles.signOutButton}
+              onPress={handleSignOut}>
+              <Text style={styles.buttonText}>Sign Out</Text>
+            </TouchableOpacity>
 
-        <View style={styles.statusCard}>
-          <Text style={styles.statusTitle}>Authentication Status</Text>
-          <Text style={styles.statusValue}>
-            {user ? `✅ Signed in as: ${user.email}` : '❌ Not signed in'}
-          </Text>
-        </View>
+            <View style={styles.statusCard}>
+              <Text style={styles.statusTitle}>Connection Status</Text>
+              <Text style={styles.statusValue}>
+                ✅ Connected to: {auth.app.options.projectId}
+              </Text>
+            </View>
 
-        <TouchableOpacity
-          style={styles.button}
-          onPress={testFirebaseConnection}>
-          <Text style={styles.buttonText}>Test Firebase Connection</Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={testFirebaseConnection}>
+              <Text style={styles.buttonText}>Test Firebase Connection</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          // Sign in/up view
+          <>
+            <Text style={styles.sectionTitle}>
+              {isSignUp ? 'Create Account' : 'Sign In'}
+            </Text>
+
+            <View style={styles.authForm}>
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+
+              <TouchableOpacity style={styles.button} onPress={handleAuth}>
+                <Text style={styles.buttonText}>
+                  {isSignUp ? 'Sign Up' : 'Sign In'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.anonymousButton}
+                onPress={handleAnonymousSignIn}>
+                <Text style={styles.buttonText}>Continue as Guest</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.switchButton}
+                onPress={() => setIsSignUp(!isSignUp)}>
+                <Text style={styles.switchButtonText}>
+                  {isSignUp
+                    ? 'Already have an account? Sign In'
+                    : "Don't have an account? Sign Up"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.statusCard}>
+              <Text style={styles.statusTitle}>Connection Status</Text>
+              <Text style={styles.statusValue}>
+                ✅ Connected to: {auth.app.options.projectId}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.button}
+              onPress={testFirebaseConnection}>
+              <Text style={styles.buttonText}>Test Firebase Connection</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
         <View style={styles.nextSteps}>
-          <Text style={styles.sectionTitle}>Next Steps</Text>
+          <Text style={styles.sectionTitle}>Setup Progress</Text>
           <Text style={styles.nextStepItem}>
             1. ✅ Firebase project configured
           </Text>
@@ -93,7 +210,8 @@ const App = () => {
             2. ✅ Authentication service ready
           </Text>
           <Text style={styles.nextStepItem}>
-            3. ⏳ Enable Authentication methods in Firebase Console
+            3. {user ? '✅' : '⏳'} Enable Authentication methods in Firebase
+            Console
           </Text>
           <Text style={styles.nextStepItem}>
             4. ⏳ Set up Firestore database
@@ -138,11 +256,17 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginTop: 20,
   },
-  description: {
-    fontSize: 16,
-    color: '#666',
-    lineHeight: 24,
+  authForm: {
     marginBottom: 20,
+  },
+  input: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
   },
   statusCard: {
     backgroundColor: '#fff',
@@ -170,12 +294,34 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 8,
+  },
+  signOutButton: {
+    backgroundColor: '#f44336',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  anonymousButton: {
+    backgroundColor: '#2196F3',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  switchButton: {
+    padding: 12,
+    alignItems: 'center',
   },
   buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  switchButtonText: {
+    color: '#4CAF50',
+    fontSize: 14,
   },
   nextSteps: {
     marginTop: 20,
