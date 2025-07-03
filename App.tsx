@@ -310,6 +310,7 @@ const App = () => {
             user={user}
             onLinkWithEmail={handleLinkWithEmail}
             onLinkWithGoogle={handleLinkWithGoogle}
+            onSignOut={handleSignOut}
           />
         )}
       </View>
