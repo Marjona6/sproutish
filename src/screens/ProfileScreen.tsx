@@ -8,6 +8,7 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
+import {resetOnboarding} from '../utils/onboardingUtils';
 
 interface ProfileScreenProps {
   user: any;
@@ -141,6 +142,34 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem}>
             <Text style={styles.menuText}>❓ Help & Support</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Debug</Text>
+          <TouchableOpacity
+            style={styles.debugButton}
+            onPress={() => {
+              Alert.alert(
+                'Reset Onboarding',
+                'This will reset the onboarding flow. The app will restart and show the onboarding screens again.',
+                [
+                  {text: 'Cancel', style: 'cancel'},
+                  {
+                    text: 'Reset',
+                    style: 'destructive',
+                    onPress: async () => {
+                      await resetOnboarding();
+                      Alert.alert(
+                        'Success',
+                        'Onboarding reset. Please restart the app to see the onboarding screens.',
+                      );
+                    },
+                  },
+                ],
+              );
+            }}>
+            <Text style={styles.debugButtonText}>🔄 Reset Onboarding</Text>
           </TouchableOpacity>
         </View>
 
@@ -298,6 +327,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  debugButton: {
+    backgroundColor: '#f44336',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  debugButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',

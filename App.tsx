@@ -16,6 +16,7 @@ import {
   TextInput,
   SafeAreaView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Firebase imports
 import {auth, db} from './src/services/firebase';
@@ -48,6 +49,8 @@ import HomeScreen from './src/screens/HomeScreen';
 import HabitsScreen from './src/screens/HabitsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import SimpleNavigator from './src/navigation/SimpleNavigator';
+import OnboardingScreen from './src/screens/OnboardingScreen';
+import CategorySelectionScreen from './src/screens/CategorySelectionScreen';
 
 const App = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -61,6 +64,10 @@ const App = () => {
   const [showLinkAccount, setShowLinkAccount] = useState(false);
   const [linkEmail, setLinkEmail] = useState('');
   const [linkPassword, setLinkPassword] = useState('');
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [categoriesSelected, setCategoriesSelected] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [isLoadingOnboarding, setIsLoadingOnboarding] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, user => {
@@ -69,6 +76,31 @@ const App = () => {
     });
 
     return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      try {
+        const onboarded = await AsyncStorage.getItem('onboardingComplete');
+        const categories = await AsyncStorage.getItem('categoriesSelected');
+        const savedCategories = await AsyncStorage.getItem(
+          'selectedCategories',
+        );
+
+        setOnboardingComplete(!!onboarded);
+        setCategoriesSelected(!!categories);
+
+        if (savedCategories) {
+          setSelectedCategories(JSON.parse(savedCategories));
+        }
+      } catch (error) {
+        console.error('Error checking onboarding status:', error);
+      } finally {
+        setIsLoadingOnboarding(false);
+      }
+    };
+
+    checkOnboardingStatus();
   }, []);
 
   const handleAuth = async () => {
@@ -213,12 +245,50 @@ const App = () => {
     setCurrentScreen(screen);
   };
 
-  if (loading) {
+  const handleOnboardingComplete = async () => {
+    try {
+      await AsyncStorage.setItem('onboardingComplete', 'true');
+      setOnboardingComplete(true);
+    } catch (error) {
+      console.error('Error saving onboarding status:', error);
+    }
+  };
+
+  const handleCategoriesComplete = async (categories: string[]) => {
+    try {
+      await AsyncStorage.setItem('categoriesSelected', 'true');
+      await AsyncStorage.setItem(
+        'selectedCategories',
+        JSON.stringify(categories),
+      );
+      setCategoriesSelected(true);
+      setSelectedCategories(categories);
+    } catch (error) {
+      console.error('Error saving categories:', error);
+    }
+  };
+
+  if (loading || isLoadingOnboarding) {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
+  }
+
+  // Show onboarding if not complete
+  if (!onboardingComplete) {
+    return (
+      <OnboardingScreen
+        onComplete={handleOnboardingComplete}
+        onSkip={handleOnboardingComplete}
+      />
+    );
+  }
+
+  // Show category selection if onboarding complete but categories not selected
+  if (!categoriesSelected) {
+    return <CategorySelectionScreen onComplete={handleCategoriesComplete} />;
   }
 
   if (!user) {
