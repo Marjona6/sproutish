@@ -13,12 +13,14 @@ interface ProfileScreenProps {
   user: any;
   onLinkWithEmail?: (email: string, password: string) => void;
   onLinkWithGoogle?: () => void;
+  onSignOut?: () => void;
 }
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({
   user,
   onLinkWithEmail,
   onLinkWithGoogle,
+  onSignOut,
 }) => {
   const [showLinkAccount, setShowLinkAccount] = useState(false);
   const [linkEmail, setLinkEmail] = useState('');
@@ -142,7 +144,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.signOutButton}>
+        <TouchableOpacity style={styles.signOutButton} onPress={onSignOut}>
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
       </View>
